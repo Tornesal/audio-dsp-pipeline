@@ -5,15 +5,18 @@
 #include <stdexcept>
 #include <vector>
 
+// Holds audio samples in separate channel buffers
 struct AudioData {
     uint32_t sampleRate = 0;
     std::vector<std::vector<float>> channels;
 };
 
+// Return how many channels are stored in the audio buffer
 inline size_t channelCount(const AudioData& audio) {
     return audio.channels.size();
 }
 
+// Count frames and make sure every channel has the same length
 inline size_t frameCount(const AudioData& audio) {
     if (audio.channels.empty()) {
         return 0;
@@ -29,6 +32,7 @@ inline size_t frameCount(const AudioData& audio) {
     return frames;
 }
 
+// Convert frame count and sample rate into seconds
 inline double durationSeconds(const AudioData& audio) {
     if (audio.sampleRate == 0) {
         return 0.0;

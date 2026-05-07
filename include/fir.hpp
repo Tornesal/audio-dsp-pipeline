@@ -4,8 +4,10 @@
 #include <cstdint>
 #include <vector>
 
+// Build low-pass FIR coefficients from the sample rate and cutoff
 std::vector<float> designLowPassFir(uint32_t sampleRate, float cutoffHz, size_t tapCount);
 
+// Keeps FIR coefficients and delay-line state for one audio channel
 class FirFilter {
 public:
     explicit FirFilter(std::vector<float> coefficients);

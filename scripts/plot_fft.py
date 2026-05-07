@@ -12,6 +12,7 @@ from pathlib import Path
 import sys
 
 try:
+    # Load plotting and audio libraries before doing any file work
     import matplotlib
 
     matplotlib.use("Agg")
@@ -29,6 +30,7 @@ except ImportError as exc:
 
 
 def parse_args() -> argparse.Namespace:
+    # Set up the command-line interface for the FFT plotter
     parser = argparse.ArgumentParser(
         description="Plot before/after FFT magnitude spectra for two mono WAV files."
     )
@@ -39,6 +41,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_mono_wav(path: Path) -> tuple[int, np.ndarray]:
+    # Read the WAV file and make sure it is usable for this stage
     if not path.exists():
         raise ValueError(f"File does not exist: {path}")
 
@@ -49,6 +52,7 @@ def load_mono_wav(path: Path) -> tuple[int, np.ndarray]:
     if samples.ndim != 1:
         raise ValueError(f"Only mono WAV files are supported: {path}")
 
+    # Convert integer or float samples into normalized floating-point audio
     if np.issubdtype(samples.dtype, np.integer):
         info = np.iinfo(samples.dtype)
         if info.min == 0:
@@ -69,6 +73,7 @@ def load_mono_wav(path: Path) -> tuple[int, np.ndarray]:
 
 
 def magnitude_spectrum_db(samples: np.ndarray, sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
+    # Apply a Hann window before the FFT to reduce spectral leakage
     window = np.hanning(samples.size)
     windowed = samples * window
     spectrum = np.fft.rfft(windowed)
@@ -84,6 +89,7 @@ def main() -> int:
     image_path = Path(args.image_path)
 
     try:
+        # Load both files and confirm they can be compared directly
         input_rate, input_samples = load_mono_wav(input_path)
         output_rate, output_samples = load_mono_wav(output_path)
 
@@ -99,11 +105,14 @@ def main() -> int:
                 f"{output_path} has {output_samples.size}"
             )
 
+        # Compute before and after FFT magnitudes
         input_freq, input_mag = magnitude_spectrum_db(input_samples, input_rate)
         output_freq, output_mag = magnitude_spectrum_db(output_samples, output_rate)
 
+        # Create the output folder if it does not exist yet
         image_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Build the before/after plot and save it as a PNG file
         plt.figure(figsize=(11, 6))
         plt.plot(input_freq, input_mag, label="Before", linewidth=1.0, alpha=0.85)
         plt.plot(output_freq, output_mag, label="After", linewidth=1.0, alpha=0.85)

@@ -21,11 +21,13 @@ struct Options {
     size_t bufferSize = 512;
 };
 
+// Print the command-line format the program expects
 void printUsage(const char* executable) {
     std::cerr << "Usage: " << executable << " input.wav output.wav [--cutoff hz] [--taps count] [--buffer samples]\n"
               << "Defaults: --cutoff 3000 --taps 101 --buffer 512\n";
 }
 
+// Parse a floating-point option and report the option name on failure
 float parseFloatOption(const std::string& name, const std::string& value) {
     try {
         size_t parsed = 0;
@@ -39,6 +41,7 @@ float parseFloatOption(const std::string& name, const std::string& value) {
     }
 }
 
+// Parse a positive integer option without allowing signed unsigned-conversion surprises
 size_t parseSizeOption(const std::string& name, const std::string& value) {
     if (value.empty() || value[0] == '-' || value[0] == '+') {
         throw std::runtime_error("Invalid integer value for " + name + ": " + value);
@@ -56,6 +59,7 @@ size_t parseSizeOption(const std::string& name, const std::string& value) {
     }
 }
 
+// Read positional paths and optional DSP settings from the command line
 Options parseArgs(int argc, char** argv) {
     if (argc < 3) {
         throw std::runtime_error("Missing required input and output paths");
@@ -65,6 +69,7 @@ Options parseArgs(int argc, char** argv) {
     options.inputPath = argv[1];
     options.outputPath = argv[2];
 
+    // Walk through optional arguments after the input and output paths
     for (int i = 3; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--cutoff") {
@@ -87,6 +92,7 @@ Options parseArgs(int argc, char** argv) {
         }
     }
 
+    // Validate final option values before any file work starts
     if (options.bufferSize == 0) {
         throw std::runtime_error("--buffer must be greater than 0");
     }
@@ -104,6 +110,7 @@ Options parseArgs(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     try {
+        // Load options, read the WAV, process it, and write the filtered result
         const Options options = parseArgs(argc, argv);
 
         const AudioData input = readWavFile(options.inputPath);
@@ -111,11 +118,13 @@ int main(int argc, char** argv) {
         const PipelineResult result = processWithFir(input, coefficients, options.bufferSize);
         writeWavFile(options.outputPath, result.audio);
 
+        // Calculate latency numbers from the FIR length and buffer size
         const double duration = durationSeconds(input);
         const double firDelaySamples = static_cast<double>(options.tapCount - 1) / 2.0;
         const double firDelayMs = firDelaySamples / static_cast<double>(input.sampleRate) * 1000.0;
         const double bufferDurationMs = static_cast<double>(options.bufferSize) / static_cast<double>(input.sampleRate) * 1000.0;
 
+        // Final printout to show what was processed and how long it took
         std::cout << std::fixed << std::setprecision(3);
         std::cout << "Loaded " << options.inputPath << '\n';
         std::cout << "Sample rate: " << input.sampleRate << " Hz\n";

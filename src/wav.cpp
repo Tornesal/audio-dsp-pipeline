@@ -16,6 +16,7 @@ struct WavFormat {
     uint16_t bitsPerSample = 0;
 };
 
+// Read a little-endian 16-bit integer from the WAV stream
 uint16_t readU16(std::istream& input) {
     unsigned char bytes[2] = {};
     input.read(reinterpret_cast<char*>(bytes), 2);
@@ -25,6 +26,7 @@ uint16_t readU16(std::istream& input) {
     return static_cast<uint16_t>(bytes[0] | (bytes[1] << 8));
 }
 
+// Read a little-endian 32-bit integer from the WAV stream
 uint32_t readU32(std::istream& input) {
     unsigned char bytes[4] = {};
     input.read(reinterpret_cast<char*>(bytes), 4);
@@ -37,6 +39,7 @@ uint32_t readU32(std::istream& input) {
         (static_cast<uint32_t>(bytes[3]) << 24);
 }
 
+// Write a little-endian 16-bit integer to the WAV stream
 void writeU16(std::ostream& output, uint16_t value) {
     const unsigned char bytes[2] = {
         static_cast<unsigned char>(value & 0xff),
@@ -45,6 +48,7 @@ void writeU16(std::ostream& output, uint16_t value) {
     output.write(reinterpret_cast<const char*>(bytes), 2);
 }
 
+// Write a little-endian 32-bit integer to the WAV stream
 void writeU32(std::ostream& output, uint32_t value) {
     const unsigned char bytes[4] = {
         static_cast<unsigned char>(value & 0xff),
@@ -55,6 +59,7 @@ void writeU32(std::ostream& output, uint32_t value) {
     output.write(reinterpret_cast<const char*>(bytes), 4);
 }
 
+// Read a four-character WAV chunk ID
 std::string readId(std::istream& input) {
     char id[4] = {};
     input.read(id, 4);
@@ -64,6 +69,7 @@ std::string readId(std::istream& input) {
     return std::string(id, 4);
 }
 
+// Skip over chunk data that this reader does not need
 void skipBytes(std::istream& input, uint32_t byteCount) {
     input.seekg(byteCount, std::ios::cur);
     if (!input) {
@@ -71,6 +77,7 @@ void skipBytes(std::istream& input, uint32_t byteCount) {
     }
 }
 
+// Convert normalized float audio into a clipped PCM16 sample
 int16_t floatToPcm16(float sample) {
     const float clamped = std::max(-1.0f, std::min(1.0f, sample));
     int value = 0;
@@ -89,11 +96,13 @@ int16_t floatToPcm16(float sample) {
 } // namespace
 
 AudioData readWavFile(const std::string& path) {
+    // Open the WAV file as binary data so header bytes are read exactly
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         throw std::runtime_error("Failed to open WAV file for reading: " + path);
     }
 
+    // Verify the file starts with the RIFF/WAVE identifiers
     if (readId(input) != "RIFF") {
         throw std::runtime_error("Not a RIFF file: " + path);
     }
@@ -110,11 +119,13 @@ AudioData readWavFile(const std::string& path) {
     uint32_t dataSize = 0;
     std::streampos dataOffset = 0;
 
+    // Read chunks until both the format and audio data chunks are found
     while (input && !(foundFormat && foundData)) {
         const std::string chunkId = readId(input);
         const uint32_t chunkSize = readU32(input);
 
         if (chunkId == "fmt ") {
+            // Parse the basic PCM format fields from the fmt chunk
             if (chunkSize < 16) {
                 throw std::runtime_error("Invalid WAV fmt chunk");
             }
@@ -131,6 +142,7 @@ AudioData readWavFile(const std::string& path) {
             }
             foundFormat = true;
         } else if (chunkId == "data") {
+            // Save where the sample data starts so we can come back after validation
             dataOffset = input.tellg();
             dataSize = chunkSize;
             skipBytes(input, chunkSize);
@@ -140,10 +152,12 @@ AudioData readWavFile(const std::string& path) {
         }
 
         if (chunkSize % 2 != 0) {
+            // WAV chunks are padded to even byte boundaries
             skipBytes(input, 1);
         }
     }
 
+    // Stage 1 only supports mono PCM16 WAV files
     if (!foundFormat) {
         throw std::runtime_error("WAV fmt chunk not found: " + path);
     }
@@ -171,12 +185,14 @@ AudioData readWavFile(const std::string& path) {
     audio.channels.resize(1);
     audio.channels[0].resize(dataSize / 2);
 
+    // Jump back to the data chunk now that the format has been validated
     input.clear();
     input.seekg(dataOffset);
     if (!input) {
         throw std::runtime_error("Failed to seek to WAV data chunk");
     }
 
+    // Convert PCM16 samples to normalized float samples
     for (float& sample : audio.channels[0]) {
         const uint16_t raw = readU16(input);
         const auto signedSample = static_cast<int16_t>(raw);
@@ -187,6 +203,7 @@ AudioData readWavFile(const std::string& path) {
 }
 
 void writeWavFile(const std::string& path, const AudioData& audio) {
+    // Validate the audio data before writing the WAV header
     if (audio.sampleRate == 0) {
         throw std::runtime_error("Cannot write WAV with sample rate 0");
     }
@@ -203,11 +220,13 @@ void writeWavFile(const std::string& path, const AudioData& audio) {
     const uint32_t dataSize = static_cast<uint32_t>(dataSize64);
     const uint32_t riffSize = 36u + dataSize;
 
+    // Open the output file as binary so the WAV header is written exactly
     std::ofstream output(path, std::ios::binary);
     if (!output) {
         throw std::runtime_error("Failed to open WAV file for writing: " + path);
     }
 
+    // Write the RIFF and fmt headers for mono PCM16 audio
     output.write("RIFF", 4);
     writeU32(output, riffSize);
     output.write("WAVE", 4);
@@ -221,6 +240,7 @@ void writeWavFile(const std::string& path, const AudioData& audio) {
     writeU16(output, 2);
     writeU16(output, 16);
 
+    // Write the data chunk and convert each float sample to PCM16
     output.write("data", 4);
     writeU32(output, dataSize);
 
